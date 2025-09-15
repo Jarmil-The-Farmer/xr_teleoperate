@@ -194,6 +194,18 @@ class EpisodeWriter():
         self.need_save = True  # Set the save flag
         logger_mp.info(f"==> Episode saved start...")
 
+    def delete_episode(self):
+        # when is avaliable = not recording
+        if self.is_available == True:
+            logger_mp.warning("Episode was already saved")
+            return
+        
+        self.episode_id = self.episode_id - 1
+        self.need_save = False     # Reset the save flag
+        self.is_available = True   # Mark the class as available after saving
+        self.episode_data = []
+        logger_mp.info("==> Deleted current episode")
+
     def _save_episode(self):
         """
         Save the episode data to a JSON file.
