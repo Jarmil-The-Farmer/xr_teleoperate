@@ -37,8 +37,10 @@ start_signal = False
 running = True
 should_toggle_recording = False
 is_recording = False
+should_delete_episode = False
 def on_press(key):
-    global running, start_signal, should_toggle_recording
+    logger_mp.info(f"on_press trigger with key: {key}")
+    global running, start_signal, should_toggle_recording, should_delete_episode
     if key == 'r':
         start_signal = True
         logger_mp.info("Program start signal received.")
@@ -47,6 +49,11 @@ def on_press(key):
         running = False
     elif key == 's' and start_signal == True:
         should_toggle_recording = True
+    elif key == 'd' and start_signal == True:
+        should_delete_episode = True
+    elif key == 'a' and start_signal == True:
+        if args.sim:
+            publish_reset_category(1, reset_pose_publisher)
     else:
         logger_mp.info(f"{key} was pressed, but no action is defined for this key.")
 listen_keyboard_thread = threading.Thread(target=listen_keyboard, kwargs={"on_press": on_press, "until": None, "sequential": False,}, daemon=True)
@@ -207,7 +214,11 @@ if __name__ == '__main__':
         while not start_signal:
             time.sleep(0.01)
         arm_ctrl.speed_gradual_max()
+        REPORT_WINDOW = 2.0  # s
+        frames = 0
+        t_report = time.perf_counter()
         while running:
+            t0 = time.perf_counter()
             start_time = time.time()
 
             if not args.headless:
@@ -240,6 +251,12 @@ if __name__ == '__main__':
                     recorder.save_episode()
                     if args.sim:
                         publish_reset_category(1, reset_pose_publisher)
+
+            if args.record and should_delete_episode:
+                recorder.delete_episode()
+                should_delete_episode = False
+                is_recording = False
+
             # get input data
             tele_data = tv_wrapper.get_motion_state_data()
             if (args.ee == "dex3" or args.ee == "inspire1" or args.ee == "brainco") and args.xr_mode == "hand":
@@ -414,6 +431,14 @@ if __name__ == '__main__':
             sleep_time = max(0, (1 / args.frequency) - time_elapsed)
             time.sleep(sleep_time)
             logger_mp.debug(f"main process sleep: {sleep_time}")
+
+            frames += 1
+            now = time.perf_counter()
+            if now - t_report >= REPORT_WINDOW:
+                fps = frames / (now - t_report)
+                logger_mp.info(f"FPS: {fps:.1f}")
+                frames = 0
+                t_report = now
 
     except KeyboardInterrupt:
         logger_mp.info("KeyboardInterrupt, exiting program...")
